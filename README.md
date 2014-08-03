@@ -77,12 +77,13 @@ a prefix, then the history field must be the empty string (i.e., `"history" :
 [""]`). Also, suppose you estimate a language model where `--order` is greater
 than one and you request a stream longer than one token. In this case, if you
 don't have a history (or the length of the history is suboptimal), then the
-brain will essentially bootstrap the history. For instance, if you estimated a
-trigram and you request a stream four tokens long, then the brain will query the
-unigrams for the first token. Then it will query the bigrams, using the first
-token, for the second token. Then it will query the trigrams, using the first
-two tokens, for the third token. Finally, it will query the trigrams, using the
-two most recent tokens, for the fourth token in the stream.
+brain will essentially bootstrap the history to length `n-1`, where `n` is the
+order of the model. For instance, if you estimated a trigram and you request a
+stream four tokens long but you don't have a history, then the brain will query
+the unigrams for the first token. Then it will query the bigrams, using the
+first token, for the second token. Then it will query the trigrams, using the
+first two tokens, for the third token. Finally, it will query the trigrams,
+using the two most recent tokens, for the fourth token in the stream.
 
 `length` is an integer which governs the length of the sentence to query from
 the language model.
@@ -99,7 +100,7 @@ natural distribution over unigrams.
 Note that the brain will apply the Markov assumption to your history. In other
 words, the history will be sliced according to the order: `history[-(n-1):]`.
 This means that if you estimate trigram models, but your history is `["Because",
-"I", "could", "get", "Uromysitisis", "poisoning", "and", "die", "." ]`, then the
+"I", "could", "get", "Uromysitisis", "poisoning", "and", "die", "."]`, then the
 brain will only consider `["die", "."]` when it queries a trigram.
 
 > Because I could get Uromysitisis poisoning and die. That's why! Do you think I
