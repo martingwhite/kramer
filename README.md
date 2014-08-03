@@ -21,27 +21,29 @@ See `braind -h` for basic usage. **The exception handling is limited.**
 
 ### Configuring the server
 
-The brain estimates two n-gram language models, fixing the vocabulary to only
-words from a specified file. Optionally, you can set the order (default=3) and
-you can specify the smoothing algorithm (default='Modified Kneser-Ney').
+The brain estimates two n-gram language models, fixing the vocabulary for each
+model to tokens from a specified file. Optionally, you can set the order
+(default=3) and you can specify the smoothing algorithm (default='ModKN').
 Assuming `braind` is in your path, enter
 
 ```bash
 braind path/to/training/data path/to/vocabulary/file
 ```
 
-at a shell prompt. This will estimate a trigram back-off model using ModKN from
-the training data and write the ARPA file to `/tmp/blm`. It will also construct
-a statically interpolated model from component n-gram models and write the ARPA
-file to `/tmp/ilm`. The vocabulary file must have one token on each line. To
-build an exemplar vocabulary file from the Shakespeare corpus, enter
+at a shell prompt. This will estimate a trigram back-off model using Modified
+Kneser-Ney smoothing from the training data and write the ARPA file to
+`/tmp/blm`. It will also construct a statically interpolated model from
+component n-gram models and write the ARPA file to `/tmp/ilm`.
+
+The vocabulary file must have one token on each line. To build an exemplar
+vocabulary file from the Shakespeare corpus, enter
 
 ```bash
 estimate-ngram -text shakespeare.txt -write-vocab shakespeare.vocab
 ```
 
-Tokens in the vocabulary file that are not in the training data will be factored
-into the unigram estimates.
+at a shell prompt. Tokens in the vocabulary file that are not in the training
+data will be factored into the models' unigram estimates.
 
 Then the brain will make two named pipes, `/tmp/fifo0` and `/tmp/fifo1`, to
 serve as communication channels to/from the n-gram server before daemonizing the
@@ -66,33 +68,39 @@ A request is a JSON document with four fields: `model`, `flavor`, `history` and
 `model` can take one of two values: `backoff` or `interpolate`.
 
 `flavor` can take one of three values: `up`, `down` or `strange`. `up`
-corresponds to the *natural* distribution over a set of tokens; `down`
-corresponds to the *unnatural* distribution; `strange` linearly interpolates
+corresponds to the *natural* distribution over a set of tokens. `down`
+corresponds to the *unnatural* distribution. `strange` linearly interpolates
 `up` and `down`.
 
 `history` contains the initial prefix as an array of strings. If you do not have
-a prefix, then the history field must be an empty string. Also, suppose you
-estimate a language model with an order greater than one and you request a
-stream longer than one token. In this case, if you don't have a history (i.e.,
-`"history" : [""]`), then the brain will essentially bootstrap the history from
-unigrams to a sequence of `n-1` tokens, where `n` is the order of the model.
+a prefix, then the history field must be the empty string (i.e., `"history" :
+[""]`). Also, suppose you estimate a language model where `--order` is greater
+than one and you request a stream longer than one token. In this case, if you
+don't have a history (or the length of the history is suboptimal), then the
+brain will essentially bootstrap the history. For instance, if you estimated a
+trigram and you request a stream four tokens long, then the brain will query the
+unigrams for the first token. Then it will query the bigrams, using the first
+token, for the second token. Then it will query the trigrams, using the first
+two tokens, for the third token. Finally, it will query the trigrams, using the
+two most recent tokens, for the fourth token in the stream.
 
 `length` is an integer which governs the length of the sentence to query from
 the language model.
 
-The minimal request has the form
+A minimal request has the form
 
 ```json
 { "model" : "backoff", "flavor" : "up", "history" : [""], "length" : 1 }
 ```
 
 The server will respond with a unigram sample from the back-off model using the
-natural distribution over unigrams. Note that the brain will apply the Markov
-assumption to your history. In other words, the history will be sliced according
-to the order: `history[-(n-1):]`. This means that if you estimate trigram
-models, but your history is `["Because", "I", "could", "get", "Uromysitisis",
-"poisoning", "and", "die", "." ]`, then the brain will only consider `["die",
-"."]` when it queries a trigram.
+natural distribution over unigrams.
+
+Note that the brain will apply the Markov assumption to your history. In other
+words, the history will be sliced according to the order: `history[-(n-1):]`.
+This means that if you estimate trigram models, but your history is `["Because",
+"I", "could", "get", "Uromysitisis", "poisoning", "and", "die", "." ]`, then the
+brain will only consider `["die", "."]` when it queries a trigram.
 
 > Because I could get Uromysitisis poisoning and die. That's why! Do you think I
 > enjoy living like this? The shame? The humiliation? You know I have been
@@ -114,7 +122,7 @@ cat request > /tmp/fifo0 && cat /tmp/fifo1
 { "stream" : ["That's", "why", "!"] }
 ```
 
-The response is a sequence of 3 tokens. The sequence is seeded by the history,
+The response is a sequence of three tokens. The sequence is seeded by the history,
 and the tokens are sampled from the back-off model using the natural
 distribution over tokens.
 
