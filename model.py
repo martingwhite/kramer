@@ -8,14 +8,31 @@ def accumulate(iterable, func=operator.add):
     total = func(total, element)
     yield total
 
-def categorical_sample(sample_space, probabilities):
+def up(estimates):
+  return estimates
+
+def down(estimates):
+  estimates.reverse()
+  return estimates
+
+def strange(estimates):
+  return [sum(t) / 2 for t in zip(*[estimates, estimates[::-1]])]
+
+def categorical_sample(tokens, estimates, flavor='up'):
   from bisect import bisect
   from random import random
   #from itertools import accumulate
 
-  cdistribution = list(accumulate(probabilities))
-  uvariate = random() * cdistribution[-1]
-  return sample_space[bisect(cdistribution, uvariate)]
+  estimates, tokens = [list(t) for t in zip(*sorted(zip(estimates, tokens)))]
+
+  flavors = { 'up' : up, 'down' : down, 'strange' : strange }
+  estimates = flavors[flavor](estimates)
+
+  cumulative_estimates = list(accumulate(estimates))
+  uniform_variate = random() * cumulative_estimates[-1]
+  sample_index = bisect(cumulative_estimates, uniform_variate)
+
+  return tokens[sample_index]
 
 class Ngram(object):
   def __init__(self, lm_file):
@@ -24,6 +41,7 @@ class Ngram(object):
     self._arpa_model_header = []
     self._ngram_buckets = []
     self._ngram_bw_store = {}
+    self.flavor = 'up'
 
     with open(lm_file) as f:
       next(f) # skip 1st line
@@ -57,11 +75,11 @@ class Ngram(object):
 
     prefix = ' '.join(history)
     if n == 1:
-      s, p = f(self._ngram_buckets[0].items())
-      return categorical_sample(s, p)
+      tokens, estimates = f(self._ngram_buckets[0].items())
+      return categorical_sample(tokens, estimates, self.flavor)
     elif prefix in self._ngram_buckets[n-1]:
-      s, p = f(self._ngram_buckets[n-1][prefix])
-      return categorical_sample(s, p)
+      tokens, estimates = f(self._ngram_buckets[n-1][prefix])
+      return categorical_sample(tokens, estimates, self.flavor)
     else:
       return self._ngram_backoff(n - 1, history[1:])
 
@@ -78,5 +96,6 @@ class Ngram(object):
     for i in range(length):
       stream.append(self._ngram_backoff(n, history))
       if n > 1:
-        history = (H + stream)[-(n - 1):]
+        history = (H + stream)[-(n - 1):] # Markov assumption
+
     return stream

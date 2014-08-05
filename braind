@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python2
 
 import os
 import sys
@@ -10,43 +10,59 @@ import signal
 import argparse
 import subprocess
 
-fifo0, fifo1, mfile = scratch = '/tmp/fifo0', '/tmp/fifo1', '/tmp/lm'
+fifo0, fifo1, bfile, ifile = scratch = \
+'/tmp/fifo0', '/tmp/fifo1', '/tmp/blm', '/tmp/ilm'
 
 def handler(signum, frame):
   map(os.remove, scratch)
   sys.exit(0)
 
 def server():
-  lm = model.Ngram(mfile)
+  blm = model.Ngram(bfile)
+  ilm = model.Ngram(ifile)
+
+  mod = { "backoff" : blm.stream, "interpolate" : ilm.stream }
 
   while True:
     with open(fifo0) as f:
-      request = json.load(f)
+      req = json.load(f)
 
-    response = {}
+    res = {}
     with open(fifo1, 'w') as f:
-      response["stream"] = lm.stream(request["history"], request["length"])
-      f.write(json.dumps(response) + '\n')
+      blm.flavor = ilm.flavor = req["flavor"]
+      res["stream"] = mod[req["model"]](req["history"], req["length"])
+      f.write(json.dumps(res) + '\n')
+
+def daemonize():
+  with daemon.DaemonContext(signal_map={signal.SIGTERM:handler}):
+    server()
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(description='Generate action-object stream.')
 
   parser.add_argument('training_data', type=argparse.FileType('r'))
+  parser.add_argument('vocabulary', type=argparse.FileType('r'))
   parser.add_argument('-o', '--order', type=int, default=3)
   parser.add_argument('-s', '--smoothing', default='ModKN')
 
   args = parser.parse_args()
 
-  mitlm = ['estimate-ngram', '-t', args.training_data.name, '-wl', mfile]
-  mitlm.extend(['-o', str(args.order), '-s', args.smoothing])
+  op = ['-v', args.vocabulary.name, '-o', str(args.order), '-s', args.smoothing]
+
+  mitlmb = ['estimate-ngram', '-t', args.training_data.name, '-wl', bfile]
+  mitlmb.extend(op)
+
+  mitlmi = ['interpolate-ngram', '-t', args.training_data.name, '-wl', ifile]
+  mitlmi.extend(op)
 
   try:
-    subprocess.check_output(mitlm)
+    subprocess.check_output(mitlmb)
+    subprocess.check_output(mitlmi)
   except (subprocess.CalledProcessError, FileNotFoundError) as e:
     sys.stderr.write(repr(e))
     sys.exit(1)
 
-  for pipe in [fifo0, fifo1]:
+  for pipe in fifo0, fifo1:
     if os.path.exists(pipe):
       if stat.S_ISFIFO(os.stat(pipe).st_mode) is not True:
         sys.stderr.write('ERROR: pipe(s) have invalid mode.')
@@ -54,5 +70,4 @@ if __name__ == '__main__':
     else:
       os.mkfifo(pipe)
 
-  with daemon.DaemonContext(signal_map={signal.SIGTERM:handler}):
-    server()
+  daemonize()
