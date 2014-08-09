@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python2.7
 
 import os
 import sys
@@ -18,8 +18,8 @@ def handler(signum, frame):
   sys.exit(0)
 
 def server():
-  blm = model.Ngram(bfile)
-  ilm = model.Ngram(ifile)
+  blm = model.Ngram(bfile, 'backoff')
+  ilm = model.Ngram(ifile, 'interpolate')
 
   mod = { "backoff" : blm.stream, "interpolate" : ilm.stream }
 
@@ -29,8 +29,7 @@ def server():
 
     res = {}
     with open(fifo1, 'w') as f:
-      blm.flavor = ilm.flavor = req["flavor"]
-      res["stream"] = mod[req["model"]](req["history"], req["length"])
+      res["stream"] = mod[req["model"]](req["flavor"], req["history"], req["length"])
       f.write(json.dumps(res) + '\n')
 
 def daemonize():
@@ -46,6 +45,10 @@ if __name__ == '__main__':
   parser.add_argument('-s', '--smoothing', default='ModKN')
 
   args = parser.parse_args()
+
+  if args.order < 2:
+    sys.stderr.write('ERROR: [-o ORDER] must be an integer greater than one.\n')
+    sys.exit(1)
 
   op = ['-v', args.vocabulary.name, '-o', str(args.order), '-s', args.smoothing]
 
@@ -65,7 +68,7 @@ if __name__ == '__main__':
   for pipe in fifo0, fifo1:
     if os.path.exists(pipe):
       if stat.S_ISFIFO(os.stat(pipe).st_mode) is not True:
-        sys.stderr.write('ERROR: pipe(s) have invalid mode.')
+        sys.stderr.write('ERROR: pipe(s) have invalid mode.\n')
         sys.exit(1)
     else:
       os.mkfifo(pipe)

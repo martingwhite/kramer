@@ -27,23 +27,23 @@ model to tokens from a specified file. Optionally, you can set the order
 Assuming `braind` is in your path, enter
 
 ```bash
-braind path/to/training/data path/to/vocabulary/file
+$ braind path/to/training/data path/to/vocabulary/file
 ```
 
-at a shell prompt. This will estimate a trigram back-off model using Modified
-Kneser-Ney smoothing from the training data and write the ARPA file to
-`/tmp/blm`. It will also construct a statically interpolated model from
-component n-gram models and write the ARPA file to `/tmp/ilm`.
+This will estimate a trigram back-off model using Modified Kneser-Ney smoothing
+from the training data and write the ARPA file to `/tmp/blm`. It will also
+construct a statically interpolated model from component n-gram models and write
+the ARPA file to `/tmp/ilm`.
 
 The vocabulary file must have one token on each line. To build an exemplar
 vocabulary file from the Shakespeare corpus, enter
 
 ```bash
-estimate-ngram -text shakespeare.txt -write-vocab shakespeare.vocab
+$ estimate-ngram -text shakespeare.txt -write-vocab shakespeare.vocab
 ```
 
-at a shell prompt. Tokens in the vocabulary file that are not in the training
-data will be factored into the models' unigram estimates.
+Tokens in the vocabulary file that are not in the training data will be factored
+into the models' unigram estimates.
 
 Then the brain will make two named pipes, `/tmp/fifo0` and `/tmp/fifo1`, to
 serve as communication channels to/from the n-gram server before daemonizing the
@@ -52,8 +52,8 @@ process.
 When the server is started, the first thing it will do is deserialize `/tmp/blm`
 and `/tmp/ilm` into distinct key-value stores. Obviously, this is a horribly
 inefficient data structure for this purpose, but performance is not the key
-concern for our current work. The shell prompt will return after the server
-loads the language models. You can verify the server is running by examining the
+concern for our current work. The prompt will return after the server loads the
+language models. You can verify the server is running by examining the
 output of `ps x`.
 
 ### Communicating with the server
@@ -65,14 +65,14 @@ and read responses from `/tmp/fifo1`.
 A request is a JSON document with four fields: `model`, `flavor`, `history` and
 `length`.
 
-`model` can take one of two values: `backoff` or `interpolate`.
+* `model` can take one of two values: `backoff` or `interpolate`.
 
-`flavor` can take one of three values: `up`, `down` or `strange`. `up`
+* `flavor` can take one of three values: `up`, `down` or `strange`. `up`
 corresponds to the *natural* distribution over a set of tokens. `down`
 corresponds to the *unnatural* distribution. `strange` linearly interpolates
-`up` and `down`.
+`up` and `down` where lambda is 0.5.
 
-`history` contains the initial prefix as an array of strings. If you do not have
+* `history` contains the initial prefix as an array of strings. If you do not have
 a prefix, then the history field must be the empty string (i.e., `"history" :
 [""]`). Also, suppose you estimate a language model where `--order` is greater
 than one and you request a stream longer than one token. In this case, if you
@@ -85,7 +85,7 @@ first token, for the second token. Then it will query the trigrams, using the
 first two tokens, for the third token. Finally, it will query the trigrams,
 using the two most recent tokens, for the fourth token in the stream.
 
-`length` is an integer which governs the length of the sentence to query from
+* `length` is an integer which governs the length of the sentence to query from
 the language model.
 
 A minimal request has the form
