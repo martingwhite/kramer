@@ -55,7 +55,8 @@ if __name__ == '__main__':
   mitlmb = ['estimate-ngram', '-t', args.training_data.name, '-wl', bfile]
   mitlmb.extend(op)
 
-  mitlmi = ['interpolate-ngram', '-t', args.training_data.name, '-wl', ifile]
+  #mitlmi = ['interpolate-ngram', '-t', args.training_data.name, '-wl', ifile]
+  mitlmi = ['estimate-ngram', '-t', args.training_data.name, '-wl', ifile]
   mitlmi.extend(op)
 
   try:
